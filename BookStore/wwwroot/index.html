@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+	<title>BookStore</title>
+	<meta charset="utf-8" />
+	<link rel="stylesheet" href="css/style.css" />
+	<script src="js/jquery.min.js" type="text/javascript"></script>
+	<script type="text/javascript">
+		window.cart = {};
+		window.books = [];
+		if (localStorage.getItem('cart'))
+			cart = JSON.parse(localStorage.getItem('cart'));
+
+		function getNumInCart() {
+			var numInCart = 0;
+			for (var itemId in cart)
+				numInCart += cart[itemId];
+			return numInCart;
+		}
+
+		jQuery(document).ready(function($) {
+			function getList() {
+				$.getJSON('/catalog', function(json) {
+					var arr = window.books = json.books;
+					var res = '';
+					$('#book-table').html('');
+					for (var id in arr) {
+						var inCart = (cart[id] || 0);
+						res += '<div class="table-item" id="item' + id + '">'
+							+ '<span class="item-image"><img src="' + arr[id].image + '" /></span>'
+							+ '<span class="item-title">' + arr[id].name + '</span>'
+							+ '<span class="item-author">' + arr[id].author + '</span>'
+							+ '<span class="item-date">' + arr[id].date + '</span>'
+							+ '<span class="item-cost">' + arr[id].cost + '</span>'
+							+ '<span class="item-isbn">' + arr[id].isbn + '</span>'
+							+ (arr[id].qty > 0 ? '<span class="item-qty">В наличии: <span class="item-qty-number">' + (arr[id].qty - inCart) + '</span></span>'
+							+ '<span class="item-add">'
+							+ (inCart > 0 ? 'В корзине: <strong class="item-added-qty">' + inCart + '</strong>' : '<input class="item-add-input" type="number" min="1" max="' + arr[id].qty + '" value="1" /><span class="item-button">В корзину</span>') + '</span>' : '<span class="item-qty">Нет в наличии</span>')
+							+ '</div>';
+					}
+
+					$('#book-table').append(res);
+				});
+			}
+			getList();
+
+			$('.cart-qty').text(getNumInCart());
+
+			$('#update').click(getList);
+			
+			$(document).on('click', '.item-add .item-button', function() {
+				var id = $(this).parents('.table-item').attr('id').split('item')[1];
+				var qty = $(this).prev('.item-add-input');
+				var stock = $(this).parent().siblings('.item-qty').children('span');
+				var inStock = +stock.text();
+				var oldQty = cart[id] || 0;
+				var newQty = +qty.val();
+				if (+newQty > inStock)
+					newQty = cart[id] = oldQty + inStock;
+				else 
+					cart[id] = newQty + oldQty;
+				$(this).parent().html('В корзине: <strong class="item-added-qty">' + newQty + '</strong>');
+				stock.text(+stock.text() - newQty);
+				$(this).next('.item-added-qty').text(newQty);
+				localStorage.setItem('cart', JSON.stringify(cart));
+				$('.cart-qty').text(getNumInCart());
+			});
+		});
+	</script>
+</head>
+<body>
+	<div id="wrap">
+		<div id="title">
+			<h1 id="title-inner">
+				<a href="index.html">
+					<span class="title">BookStore</span>
+					<span class="title-desc">Интернет-магазин книг</span>
+				</a>
+				<span class="title-nav"><a href="cart.html">Корзина (<span class="cart-qty">0</span>)</a></span>
+			</h1>
+		</div>
+		<div id="main">
+			<div class="container">
+				<h2><span>Каталог</span><em id="update">Обновить</em></h2>
+				<div id="catalog">
+					<div id="book-table">
+					</div>
+				</div>
+			</div>
+		</div>
+		<div id="footer">
+			<div id="footer-inner">BookStore by Alex_63 © 2021</div>
+		</div>
+	</div>
+</body>
+</html>

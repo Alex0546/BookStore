@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+	<title>BookStore - Корзина</title>
+	<meta charset="utf-8" />
+	<link rel="stylesheet" href="css/style.css" />
+	<script src="js/jquery.min.js" type="text/javascript"></script>
+	<script type="text/javascript">
+		window.cart = {};
+		window.cost = 0;
+		window.orderId = 0;
+		if (localStorage.getItem('cart'))
+			cart = JSON.parse(localStorage.getItem('cart'));
+
+		function getNumInCart() {
+			var numInCart = 0;
+			for (var itemId in cart)
+				numInCart += cart[itemId];
+			return numInCart;
+		}
+
+		function getTotalCost() {
+			var cost = 0;
+			for (var bookId in cart) {
+				cost += books[bookId].cost * cart[bookId];
+			}
+			var costString = cost > 1000 ? '<del>' + cost + '</del> <span id="total-cost-sale">' + (cost*.95) + '</span>' : cost;
+			window.cost = cost > 1000 ? cost * .95 : cost;
+			$('#total-cost').html(costString);
+		}
+
+		function showCart() {
+			var res = '';
+			$('#cart-table').html('');
+			$('.cart-qty').text(getNumInCart());
+			if (!Object.keys(cart).length) 
+				res = '<div class="cart-item">Корзина пуста</div>';
+			else {
+				for (var id in cart) {
+					var desc = books[id].name + ' (' + books[id].author + ')';
+					var inStock = books[id].qty;
+					res += '<div class="cart-item" id="item' + id + '">'
+						+ '<div class="item-title">' + desc + '</div>'
+						+ '<div class="item-cost">' + books[id].cost + '</div>'
+						+ '<div class="item-manage">'
+						+ '<a href="javascript://" class="item-qty-inc item-button">+</a> '
+						+ '<input readonly="readonly" type="text" size="1" min="1" max="' + inStock + '" class="item-qty" value="' + cart[id] + '" /> '
+						+ '<a href="javascript://" class="item-qty-dec item-button">&ndash;</a> &nbsp;'
+						+ '<a href="javascript://" class="item-delete item-button">Удалить</a>'
+						+ '</div></div>';
+				}
+				$('#cart-table').append('<div id="total" class="cart-item">Позиций на сумму <span id="total-cost"></span></div>');
+				getTotalCost();
+				$('#order').show();
+			}
+			$('#cart-table').prepend(res);
+		}
+
+		jQuery(document).ready(function($) {
+			function getList() {
+				$.getJSON('/catalog', function(json) {
+					window.books = json.books;
+					showCart();
+				});
+			}
+			getList();
+			
+			$(document).on('click', '.item-button', function() {
+				var id = $(this).parents('.cart-item').attr('id').split('item')[1];
+				switch ($(this).attr('class').split(' item-button')[0]) {
+					case 'item-qty-inc':
+						if (cart[id] < +$(this).siblings('.item-qty').attr('max')) {
+							cart[id]++;
+							$(this).siblings('.item-qty').val(cart[id]);
+						}
+						break;
+					case 'item-qty-dec':
+						if (cart[id] > 1) {
+							cart[id]--;
+							$(this).siblings('.item-qty').val(cart[id]);
+						}
+						break;
+					case 'item-delete':
+						$(this).parents('.cart-item').remove();
+						delete cart[id];
+						break;
+				}
+				localStorage.setItem('cart', JSON.stringify(cart));
+				if (!Object.keys(cart).length) {
+					$('#cart-table').html('<div class="cart-item">Корзина пуста</div>');
+					$('#order').hide();
+				} else {
+					getTotalCost()
+					$('#order').show();
+				}
+				$('.cart-qty').text(getNumInCart());
+			});
+
+			$(document).on('click', '#submit', function() {
+				var name = $.trim($('#client-name').val());
+				if (!name.length) {
+					alert('Поле "Имя" обязательно для заполнения в этой форме');
+					return;
+				}
+				var data = {
+					name: name,
+					cost: window.cost,
+					books: cart,
+					qty: getNumInCart()
+				};
+				$.post('/confirm', {
+					data: JSON.stringify(data)
+				}, function(response) {
+					if (response.error) {
+						alert(response.error);
+					} else {
+						window.orderId = +response.response.orderId;
+						$('#order').hide();
+						$('#order-cancel').show();
+						$('#order-id').html(orderId);
+						window.cart = {};
+						localStorage.setItem('cart', JSON.stringify(cart));
+						showCart();
+						setTimeout(function() {
+							$('#order-cancel').hide()
+						}, 60 * 1000);
+					}
+				},'json' );
+			});
+
+			$(document).on('click', '#cancel', function() {
+				$.post('/delete', {
+					orderId: window.orderId
+				}, function(response) {
+					window.cart = response.response.order.books;
+					localStorage.setItem('cart', JSON.stringify(cart));
+					showCart();
+					$('#order-cancel').hide();
+				}, 'json');
+			});
+
+		});		
+	</script>
+</head>
+<body>
+	<div id="wrap">
+		<div id="title">
+			<h1 id="title-inner">
+				<a href="index.html">
+					<span class="title">BookStore</span>
+					<span class="title-desc">Интернет-магазин книг</span>
+				</a>
+				<span class="title-nav"><a href="cart.html">Корзина (<span class="cart-qty">0</span>)</a></span>
+			</h1>
+		</div>
+		<div id="main">
+			<div class="container">
+				<h2><span>Корзина</span></h2>
+				<div id="cart">
+					<div id="cart-table">
+					</div>
+				</div>
+				<div id="order" style="display: none">
+					<h3><span>Оформление заказа</span></h3>
+					<div id="order-info">
+						<label for="client-name">Имя:</label> 
+						<input type="text" id="client-name" />
+					</div>
+					<div id="order-submit">
+						<span id="submit" class="submit">Оформить заказ</span>
+					</div>
+				</div>
+				<div id="order-cancel" style="display: none">
+					<h3><span>Информация о заказе</span></h3>
+					<div id="order-data">
+						Ваш заказ №<span id="order-id"></span>
+					</div>
+					<div id="order-cancel">
+						<span id="cancel" class="submit">Отменить заказ</span>
+					</div>
+				</div>
+			</div>
+		</div>
+		<div id="footer">
+			<div id="footer-inner">BookStore by Alex_63 © 2021</div>
+		</div>
+	</div>
+</body>
+</html>
